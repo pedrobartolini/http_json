@@ -9,16 +9,16 @@ mod response;
 pub use request::Request;
 pub use response::Response;
 
-pub struct App {
+pub struct Server {
     listener: TcpListener,
     routes: Vec<router::Route>,
 }
 
-impl App {
+impl Server {
     pub fn new(addr: &str) -> Self {
         let listener = TcpListener::bind(&addr).expect("Failed to create api server");
 
-        App {
+        Server {
             listener,
             routes: Vec::new(),
         }
@@ -28,7 +28,7 @@ impl App {
         self.routes.push(router::Route::new(pattern, handler));
     }
 
-    pub fn subscribe_routes(&mut self, func: fn(&mut App)) {
+    pub fn subscribe_routes(&mut self, func: fn(&mut Server)) {
         func(self)
     }
 
