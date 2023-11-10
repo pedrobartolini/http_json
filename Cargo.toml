@@ -13,7 +13,7 @@ include = [
 
 [lib]
 name = "direct_http"
-path = "direct_http.rs"
+path = "./src/direct_http.rs"
 
 
 [dependencies]
