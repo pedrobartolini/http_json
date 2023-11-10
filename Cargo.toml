@@ -1,11 +1,11 @@
 [package]
-name = "http_json"
+name = "direct_http"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "http_json"
-path = "http_json.rs"
+name = "direct_http"
+path = "direct_http.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
