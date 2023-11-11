@@ -1,11 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub mod request;
-pub mod response;
-
-use request::Request;
-use response::{ raw, Response };
+use super::request::Request;
+use super::response::{ raw, Response };
 
 pub struct Router {
 	root: Node,

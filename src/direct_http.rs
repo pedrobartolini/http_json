@@ -2,11 +2,13 @@ use std::io::{ Read, Write, Error, ErrorKind, Result };
 use std::net::{ TcpListener, TcpStream };
 use std::sync::Arc;
 
+mod request;
+mod response;
 mod router;
 
-pub use router::request::Request;
-pub use router::response::{ ResponseBuilder, Response, raw as RawResponse };
-pub use router::{ Router, ResponseHandler };
+pub use response::{ Response, ResponseBuilder, raw as RawResponse };
+pub use router::{ ResponseHandler, Router };
+pub use request::Request;
 
 pub struct Server {
 	listener: TcpListener,
