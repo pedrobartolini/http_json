@@ -1,22 +1,26 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::request::Request;
-use super::response::{ raw, Response };
+pub mod request;
+pub mod response;
+
+use request::Request;
+use response::{ raw, Response };
 
 pub struct Router {
 	root: Node,
 }
-#[derive(Clone)]
+
+pub type ResponseHandler = Box<dyn (Fn(Request) -> Response) + Send + Sync>;
+
 struct Node {
 	route: Option<Route>,
 	slug_placeholder: Option<String>,
 	children: HashMap<&'static str, Node>,
 }
 
-#[derive(Clone)]
 struct Route {
-	pub handler: fn(Request) -> Response,
+	pub handler: ResponseHandler,
 	method: String,
 }
 
@@ -31,7 +35,7 @@ impl Router {
 		}
 	}
 
-	pub fn subscribe_route(&mut self, method: &str, route: &'static str, handler: fn(Request) -> Response) {
+	pub fn subscribe_route(&mut self, method: &str, route: &'static str, handler: ResponseHandler) {
 		let mut current = &mut self.root;
 
 		for (i, mut slug) in route.split("/").enumerate() {
@@ -71,8 +75,8 @@ pub fn handle(mut request: Request, router: &Arc<Router>) -> String {
 			None =>
 				match current.children.get("{}") {
 					Some(node) => {
-						let slug_placeholder = node.slug_placeholder.clone();
-						request.slugs.insert(slug_placeholder.unwrap(), slug.to_string());
+						let slug_placeholder = node.slug_placeholder.clone().unwrap();
+						request.slugs.insert(slug_placeholder, slug.to_string());
 						current = node;
 					}
 					None => {

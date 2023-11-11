@@ -3,12 +3,10 @@ use std::net::{ TcpListener, TcpStream };
 use std::sync::Arc;
 
 mod router;
-mod request;
-mod response;
 
-pub use request::Request;
-pub use response::{ ResponseBuilder, Response };
-pub use router::{ Router };
+pub use router::request::Request;
+pub use router::response::{ ResponseBuilder, Response, raw as RawResponse };
+pub use router::{ Router, ResponseHandler };
 
 pub struct Server {
 	listener: TcpListener,
@@ -50,7 +48,7 @@ fn handler(mut stream: TcpStream, router: Arc<Router>) -> Result<()> {
 			.map_err(|err| Error::new(ErrorKind::InvalidData, err))?
 			.to_lowercase();
 
-		let request = match request::Request::new(&request_raw) {
+		let request = match Request::new(&request_raw) {
 			Some(request) => request,
 			None => {
 				break;
