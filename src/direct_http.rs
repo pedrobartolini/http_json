@@ -8,7 +8,7 @@ mod response;
 
 pub use request::Request;
 pub use response::{ ResponseBuilder, Response };
-pub use router::Router;
+pub use router::{ Router };
 
 pub struct Server {
 	listener: TcpListener,

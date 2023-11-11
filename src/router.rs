@@ -7,25 +7,31 @@ use super::response::{ raw, Response };
 pub struct Router {
 	root: Node,
 }
-#[derive(Debug)]
+#[derive(Clone)]
 struct Node {
-	handler: Option<fn(Request) -> Response>,
-	children: HashMap<&'static str, Node>,
+	route: Option<Route>,
 	slug_placeholder: Option<String>,
+	children: HashMap<&'static str, Node>,
+}
+
+#[derive(Clone)]
+struct Route {
+	pub handler: fn(Request) -> Response,
+	method: String,
 }
 
 impl Router {
 	pub fn new() -> Self {
 		Router {
 			root: Node {
-				handler: None,
 				slug_placeholder: None,
+				route: None,
 				children: HashMap::new(),
 			},
 		}
 	}
 
-	pub fn subscribe_route(&mut self, route: &'static str, handler: fn(Request) -> Response) {
+	pub fn subscribe_route(&mut self, method: &str, route: &'static str, handler: fn(Request) -> Response) {
 		let mut current = &mut self.root;
 
 		for (i, mut slug) in route.split("/").enumerate() {
@@ -41,13 +47,16 @@ impl Router {
 			}
 
 			current = current.children.entry(slug).or_insert_with(|| Node {
-				handler: None,
+				route: None,
 				slug_placeholder,
 				children: HashMap::new(),
 			});
 		}
 
-		current.handler = Some(handler);
+		current.route = Some(Route {
+			method: method.to_string(),
+			handler,
+		});
 	}
 }
 
@@ -73,14 +82,9 @@ pub fn handle(mut request: Request, router: &Arc<Router>) -> String {
 		}
 	}
 
-	println!("final node: {:?}", current);
-
-	match current.handler {
-		Some(handler) => {
-			match handler(request) {
-				Some(response) => response,
-				None => raw(500, "Internal Server Error"),
-			}
+	match &current.route {
+		Some(route) => {
+			if route.method == request.method { (route.handler)(request) } else { raw(405, "Method Not Allowed") }
 		}
 		None => raw(404, "Not Found"),
 	}

@@ -66,13 +66,13 @@ impl<T> ResponseBuilder<T> where T: Serialize {
 
 	pub fn finish(&self) -> Response {
 		match serde_json::to_string(self) {
-			Ok(response) => Some(raw(self.status, &response)),
-			Err(_) => None,
+			Ok(response) => raw(self.status, &response),
+			Err(_) => raw(500, "Internal error, faield to encode response."),
 		}
 	}
 }
 
-pub type Response = Option<String>;
+pub type Response = String;
 
 pub fn raw(status: i32, body: &str) -> String {
 	format!(
