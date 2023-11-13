@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, path };
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Request {

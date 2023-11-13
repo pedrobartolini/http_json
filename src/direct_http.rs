@@ -1,5 +1,5 @@
 use smol::prelude::*;
-use smol::io::{ Result, Error, ErrorKind };
+use smol::io::Result;
 
 use std::net::{ TcpListener, TcpStream };
 use std::sync::Arc;
@@ -12,27 +12,27 @@ pub use response::{ Response, ResponseBuilder, raw as RawResponse };
 pub use router::{ ResponseHandler, Router };
 pub use request::{ Request, Method };
 
-#[macro_export]
-macro_rules! MICRO {
-	($func:expr) => {
-		{
-			use std::time::Instant;
+// #[macro_export]
+// macro_rules! MICRO {
+// 	($func:expr) => {
+// 		{
+// 			use std::time::Instant;
 
-			let start_time = Instant::now();
-			let result = $func;
-			let end_time = Instant::now();
-			let elapsed_time = end_time - start_time;
+// 			let start_time = Instant::now();
+// 			let result = $func;
+// 			let end_time = Instant::now();
+// 			let elapsed_time = end_time - start_time;
 
-			println!(
-					"Time taken by {}(): {} microseconds",
-					stringify!($func),
-					elapsed_time.as_micros()
-			);
+// 			println!(
+// 					"Time taken by {}(): {} microseconds",
+// 					stringify!($func),
+// 					elapsed_time.as_micros()
+// 			);
 
-			result
-		}
-	};
-}
+// 			result
+// 		}
+// 	};
+// }
 
 pub struct Server {
 	listener: smol::Async<TcpListener>,
