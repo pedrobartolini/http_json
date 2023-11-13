@@ -74,7 +74,7 @@ impl<T> ResponseBuilder<T> where T: Serialize {
 
 pub type Response = String;
 
-pub fn raw(status: i32, body: &str) -> String {
+pub fn raw(status: i32, body: &str) -> Response {
 	format!(
 		"HTTP/1.1 {}\r\nAccess-Control-Allow-Headers: Content-Type, Authorization\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
 		status,

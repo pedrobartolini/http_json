@@ -1,4 +1,6 @@
-use std::io::{ Read, Write, Error, ErrorKind, Result };
+use smol::prelude::*;
+use smol::io::{ Result, Error, ErrorKind };
+
 use std::net::{ TcpListener, TcpStream };
 use std::sync::Arc;
 
@@ -8,15 +10,38 @@ mod router;
 
 pub use response::{ Response, ResponseBuilder, raw as RawResponse };
 pub use router::{ ResponseHandler, Router };
-pub use request::Request;
+pub use request::{ Request, Method };
+
+#[macro_export]
+macro_rules! MICRO {
+	($func:expr) => {
+		{
+			use std::time::Instant;
+
+			let start_time = Instant::now();
+			let result = $func;
+			let end_time = Instant::now();
+			let elapsed_time = end_time - start_time;
+
+			println!(
+					"Time taken by {}(): {} microseconds",
+					stringify!($func),
+					elapsed_time.as_micros()
+			);
+
+			result
+		}
+	};
+}
 
 pub struct Server {
-	listener: TcpListener,
+	listener: smol::Async<TcpListener>,
 }
 
 impl Server {
 	pub fn new(addr: &str) -> Self {
-		let listener = TcpListener::bind(&addr).expect("Failed to create api server");
+		let addr_parsed: std::net::SocketAddr = addr.parse().expect("Failed to parse address");
+		let listener = smol::Async::<TcpListener>::bind(addr_parsed).expect("Failed to create api server");
 
 		Server {
 			listener,
@@ -24,45 +49,55 @@ impl Server {
 	}
 
 	pub fn listen(self, router: Router) {
-		std::thread::spawn(move || self.client_acceptor(router));
+		smol::spawn(async move { self.client_acceptor(router).await }).detach();
 	}
 
-	#[tokio::main]
 	async fn client_acceptor(self, router: Router) {
 		let router_arc = Arc::new(router);
 
-		while let Ok((stream, _)) = self.listener.accept() {
+		while let Ok((stream, _)) = self.listener.accept().await {
 			let router_arc_clone = Arc::clone(&router_arc);
-			tokio::spawn(async move { handler(stream, router_arc_clone) });
+			smol
+				::spawn(async move {
+					let _ = handler(stream, router_arc_clone).await;
+				})
+				.detach();
 		}
 	}
 }
 
-fn handler(mut stream: TcpStream, router: Arc<Router>) -> Result<()> {
-	let mut buffer = [0; 1024];
+pub const BUFFER_SIZE: usize = 1024;
+
+async fn handler(mut stream: smol::Async<TcpStream>, router: Arc<Router>) -> Result<()> {
+	let mut buffer = [0; BUFFER_SIZE];
 
 	loop {
-		if stream.read(&mut buffer)? == 0 {
+		if stream.read(&mut buffer).await? == 0 {
 			break;
 		}
 
-		let request_raw = String::from_utf8(buffer.to_vec()).map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
-
-		let request = match Request::new(&request_raw) {
+		let mut request = match Request::new(buffer) {
 			Some(request) => request,
 			None => {
 				break;
 			}
 		};
 
-		stream.write(router::handle(request, &router).as_bytes())?;
+		let response = router::handle(&mut request, &router);
 
-		stream.flush()?;
+		stream.write(response.as_bytes()).await?;
 
-		if !request_raw.contains("connection: keep-alive") {
-			break;
+		stream.flush().await?;
+
+		if let Some(connection) = request.headers.get("connection") {
+			if connection == "keep-alive" {
+				println!("keeping alive !!");
+				continue;
+			} else {
+				break;
+			}
 		}
 	}
 
-	stream.shutdown(std::net::Shutdown::Both)
+	stream.close().await
 }

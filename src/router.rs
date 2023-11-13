@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::request::Request;
+use super::request::{ Request, Method };
 use super::response::{ raw, Response };
 
 pub struct Router {
 	root: Node,
 }
 
-pub type ResponseHandler = Box<dyn (Fn(Request) -> Response) + Send + Sync>;
+pub type ResponseHandler = Box<dyn (Fn(&Request) -> Response) + Send + Sync>;
 
 struct Node {
 	route: Option<Route>,
@@ -18,7 +18,7 @@ struct Node {
 
 struct Route {
 	pub handler: ResponseHandler,
-	method: String,
+	method: Method,
 }
 
 impl Router {
@@ -32,7 +32,7 @@ impl Router {
 		}
 	}
 
-	pub fn subscribe_route(&mut self, method: &str, route: &'static str, handler: ResponseHandler) {
+	pub fn subscribe_route(&mut self, method: Method, route: &'static str, handler: ResponseHandler) {
 		let mut current = &mut self.root;
 
 		for (i, mut slug) in route.split("/").enumerate() {
@@ -55,13 +55,13 @@ impl Router {
 		}
 
 		current.route = Some(Route {
-			method: method.to_string(),
+			method,
 			handler,
 		});
 	}
 }
 
-pub fn handle(mut request: Request, router: &Arc<Router>) -> String {
+pub fn handle(request: &mut Request, router: &Arc<Router>) -> String {
 	let mut current = &router.root;
 
 	for slug in request.path.split("/") {

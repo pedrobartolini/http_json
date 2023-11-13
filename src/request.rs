@@ -1,13 +1,15 @@
-use std::collections::HashMap;
+use std::{ collections::HashMap, path };
 
+#[derive(Debug)]
 pub struct Request {
 	pub path: String,
-	pub method: String,
+	pub method: Method,
 	pub slugs: HashMap<String, String>,
 	pub headers: HashMap<String, String>,
 }
 
-enum Method {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Method {
 	GET,
 	POST,
 	PUT,
@@ -19,35 +21,78 @@ enum Method {
 	PATCH,
 }
 
-impl Request {
-	pub fn new(mut request: &str) -> Option<Self> {
-		let method_end = request.find(" ")?;
-		let method_uppercase = request[..method_end].to_uppercase();
-		request = &request[method_end + 1..];
-
-		let path_end = request.find(" ")?;
-		let path_lowercase = request[1..path_end].to_string();
-		request = &request[path_end + 1..];
-
-		let http_version_end = request.find("\r\n")?;
-		if &request[..http_version_end].to_lowercase() != "http/1.1" {
+fn parse_method(buffer: &[u8]) -> Option<(Method, usize)> {
+	let method_end = buffer.iter().position(|&byte| byte == b' ')?;
+	let method = match &buffer[..method_end] {
+		b"GET" => Method::GET,
+		b"POST" => Method::POST,
+		b"PUT" => Method::PUT,
+		b"DELETE" => Method::DELETE,
+		b"HEAD" => Method::HEAD,
+		b"OPTIONS" => Method::OPTIONS,
+		b"TRACE" => Method::TRACE,
+		b"CONNECT" => Method::CONNECT,
+		b"PATCH" => Method::PATCH,
+		_ => {
 			return None;
 		}
+	};
 
-		request = &request[http_version_end + 2..];
+	Some((method, method_end + 1))
+}
 
-		let mut headers: HashMap<String, String> = HashMap::new();
+fn parse_path(buffer: &[u8]) -> Option<(String, usize)> {
+	let path_end = buffer.iter().position(|&byte| byte == b' ')?;
+	let path = String::from_utf8_lossy(&buffer[1..path_end]).to_string();
 
-		while let Some(end_split) = request.find("\r\n") {
-			if let Some(middle_split) = request.find(": ") {
-				headers.insert(request[..middle_split].to_lowercase(), request[middle_split + 2..end_split].to_lowercase());
-			}
-			request = &request[end_split + 2..];
+	Some((path, path_end + 1))
+}
+
+fn is_http101(buffer: &[u8]) -> Option<usize> {
+	let http_end = buffer.iter().position(|&w| w == b'\r')?;
+
+	match &buffer[..http_end] {
+		b"HTTP/1.1" => Some(http_end + 2),
+		_ => None,
+	}
+}
+
+fn parse_headers(buffer: &[u8]) -> HashMap<String, String> {
+	let mut headers: HashMap<String, String> = HashMap::new();
+
+	let mut trimmer = 0;
+
+	while let Some(line_end) = buffer[trimmer..].iter().position(|&byte| byte == b'\r') {
+		if let Some(separator) = buffer[trimmer..trimmer + line_end].iter().position(|&byte| byte == b':') {
+			let key = String::from_utf8_lossy(&buffer[trimmer..trimmer + separator]).to_string();
+			let value = String::from_utf8_lossy(&buffer[trimmer + separator + 2..trimmer + line_end]).to_string();
+			headers.insert(key, value);
 		}
 
+		trimmer += line_end + 2;
+	}
+
+	headers
+}
+
+impl Request {
+	pub fn new(buffer: [u8; super::BUFFER_SIZE]) -> Option<Self> {
+		let mut trimmer = 0;
+
+		let (method, method_end) = parse_method(&buffer)?;
+		trimmer += method_end;
+
+		let (path, path_end) = parse_path(&buffer[trimmer..])?;
+		trimmer += path_end;
+
+		let http_end = is_http101(&buffer[trimmer..])?;
+		trimmer += http_end;
+
+		let headers = parse_headers(&buffer[trimmer..]);
+
 		Some(Request {
-			method: method_uppercase,
-			path: path_lowercase,
+			method,
+			path,
 			headers,
 			slugs: HashMap::new(),
 		})
