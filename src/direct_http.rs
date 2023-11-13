@@ -46,9 +46,7 @@ fn handler(mut stream: TcpStream, router: Arc<Router>) -> Result<()> {
 			break;
 		}
 
-		let request_raw = String::from_utf8(buffer.to_vec())
-			.map_err(|err| Error::new(ErrorKind::InvalidData, err))?
-			.to_lowercase();
+		let request_raw = String::from_utf8(buffer.to_vec()).map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
 
 		let request = match Request::new(&request_raw) {
 			Some(request) => request,
