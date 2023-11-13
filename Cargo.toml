@@ -1,6 +1,6 @@
 [package]
 name = "direct_http"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 authors = ["Pedro Bartolini <pedrobartolini@outlook.com>"]
 repository = "https://github.com/pedrobartolini/direct_http"
