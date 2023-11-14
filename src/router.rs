@@ -1,12 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use super::request::{ Request, Method };
-use super::response::{ raw, Response };
-
-pub struct Router {
-	root: Node,
-}
+use super::response::Response;
 
 pub type ResponseHandler = Box<dyn (Fn(&Request) -> Response) + Send + Sync>;
 
@@ -19,6 +14,10 @@ struct Node {
 struct Route {
 	pub handler: ResponseHandler,
 	method: Method,
+}
+
+pub struct Router {
+	root: Node,
 }
 
 impl Router {
@@ -54,6 +53,8 @@ impl Router {
 			});
 		}
 
+		// TODO FIX DUPLICATE ROUTE SUBSCRIPTION
+
 		current.route = Some(Route {
 			method,
 			handler,
@@ -61,7 +62,7 @@ impl Router {
 	}
 }
 
-pub fn handle(request: &mut Request, router: &Arc<Router>) -> String {
+pub fn handle(request: &mut Request, router: &'static Router) -> Response {
 	let mut current = &router.root;
 
 	for slug in request.path.split("/") {
@@ -77,7 +78,7 @@ pub fn handle(request: &mut Request, router: &Arc<Router>) -> String {
 						current = node;
 					}
 					None => {
-						return raw(404, "Not Found");
+						return Response::status(404).message("Não encontrado.");
 					}
 				}
 		}
@@ -85,8 +86,8 @@ pub fn handle(request: &mut Request, router: &Arc<Router>) -> String {
 
 	match &current.route {
 		Some(route) => {
-			if route.method == request.method { (route.handler)(request) } else { raw(405, "Method Not Allowed") }
+			if route.method == request.method { (route.handler)(request) } else { Response::status(405).message("Método não permitido.") }
 		}
-		None => raw(404, "Not Found"),
+		None => Response::status(404).message("Não encontrado."),
 	}
 }

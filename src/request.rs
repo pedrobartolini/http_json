@@ -1,13 +1,5 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
-pub struct Request {
-	pub path: String,
-	pub method: Method,
-	pub slugs: HashMap<String, String>,
-	pub headers: HashMap<String, String>,
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum Method {
 	GET,
@@ -19,6 +11,53 @@ pub enum Method {
 	TRACE,
 	CONNECT,
 	PATCH,
+}
+
+#[derive(Debug)]
+pub struct Request {
+	pub path: String,
+	pub method: Method,
+	pub slugs: HashMap<String, String>,
+	pub headers: HashMap<String, String>,
+}
+
+impl Request {
+	pub fn new(buffer: [u8; super::BUFFER_SIZE]) -> Option<Self> {
+		let mut trimmer = 0;
+
+		let (method, method_end) = parse_method(&buffer)?;
+		trimmer += method_end;
+
+		let (path, path_end) = parse_path(&buffer[trimmer..])?;
+		trimmer += path_end;
+
+		let http_end = is_http101(&buffer[trimmer..])?;
+		trimmer += http_end;
+
+		let headers = parse_headers(&buffer[trimmer..]);
+
+		Some(Request {
+			method,
+			path,
+			headers,
+			slugs: HashMap::new(),
+		})
+	}
+
+	pub fn bearer_token(&self) -> Option<String> {
+		match self.headers.get("authorization") {
+			Some(authorization) => {
+				let mut authorization = authorization.split(" ");
+
+				if authorization.next()? != "bearer" {
+					return None;
+				}
+
+				authorization.next().map(|token| token.to_string())
+			}
+			None => None,
+		}
+	}
 }
 
 fn parse_method(buffer: &[u8]) -> Option<(Method, usize)> {
@@ -64,8 +103,8 @@ fn parse_headers(buffer: &[u8]) -> HashMap<String, String> {
 
 	while let Some(line_end) = buffer[trimmer..].iter().position(|&byte| byte == b'\r') {
 		if let Some(separator) = buffer[trimmer..trimmer + line_end].iter().position(|&byte| byte == b':') {
-			let key = String::from_utf8_lossy(&buffer[trimmer..trimmer + separator]).to_string();
-			let value = String::from_utf8_lossy(&buffer[trimmer + separator + 2..trimmer + line_end]).to_string();
+			let key = String::from_utf8_lossy(&buffer[trimmer..trimmer + separator]).to_lowercase();
+			let value = String::from_utf8_lossy(&buffer[trimmer + separator + 2..trimmer + line_end]).to_lowercase();
 			headers.insert(key, value);
 		}
 
@@ -73,43 +112,4 @@ fn parse_headers(buffer: &[u8]) -> HashMap<String, String> {
 	}
 
 	headers
-}
-
-impl Request {
-	pub fn new(buffer: [u8; super::BUFFER_SIZE]) -> Option<Self> {
-		let mut trimmer = 0;
-
-		let (method, method_end) = parse_method(&buffer)?;
-		trimmer += method_end;
-
-		let (path, path_end) = parse_path(&buffer[trimmer..])?;
-		trimmer += path_end;
-
-		let http_end = is_http101(&buffer[trimmer..])?;
-		trimmer += http_end;
-
-		let headers = parse_headers(&buffer[trimmer..]);
-
-		Some(Request {
-			method,
-			path,
-			headers,
-			slugs: HashMap::new(),
-		})
-	}
-
-	pub fn bearer_token(&self) -> Option<String> {
-		match self.headers.get("authorization") {
-			Some(authorization) => {
-				let mut authorization = authorization.split(" ");
-
-				if authorization.next()? != "bearer" {
-					return None;
-				}
-
-				authorization.next().map(|token| token.to_string())
-			}
-			None => None,
-		}
-	}
 }

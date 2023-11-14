@@ -2,43 +2,41 @@ use smol::prelude::*;
 use smol::io::Result;
 
 use std::net::{ TcpListener, TcpStream, SocketAddr };
-use std::sync::Arc;
 
 mod request;
 mod response;
 mod router;
 mod rate_limiter;
 
-pub use response::{ Response, ResponseBuilder, raw as RawResponse };
+pub use response::Response;
 pub use router::{ ResponseHandler, Router };
 pub use request::{ Request, Method };
 pub use rate_limiter::MutexLimiter as Limiter;
 
-// #[macro_export]
-// macro_rules! MICRO {
-// 	($func:expr) => {
-// 		{
-// 			use std::time::Instant;
+#[macro_export]
+macro_rules! MICRO {
+	($func:expr) => {
+		{
+			use std::time::Instant;
 
-// 			let start_time = Instant::now();
-// 			let result = $func;
-// 			let end_time = Instant::now();
-// 			let elapsed_time = end_time - start_time;
+			let start_time = Instant::now();
+			let result = $func;
+			let end_time = Instant::now();
+			let elapsed_time = end_time - start_time;
 
-// 			println!(
-// 					"Time taken by {}(): {} microseconds",
-// 					stringify!($func),
-// 					elapsed_time.as_micros()
-// 			);
+			println!(
+					"Time taken by {}(): {} microseconds",
+					stringify!($func),
+					elapsed_time.as_micros()
+			);
 
-// 			result
-// 		}
-// 	};
-// }
+			result
+		}
+	};
+}
 
 pub struct Server {
 	listener: smol::Async<TcpListener>,
-	limiter: Limiter,
 }
 
 impl Server {
@@ -48,50 +46,43 @@ impl Server {
 
 		Server {
 			listener,
-			limiter: Limiter::new(10, 5000),
 		}
 	}
 
-	pub fn listen(self, router: Router) {
-		self.limiter.start();
+	pub fn listen(self, router: Router, limiter: Limiter) {
+		limiter.start();
 
-		smol::spawn(async move { self.client_acceptor(router).await }).detach();
+		let router: &'static Router = Box::leak(Box::new(router));
+
+		smol::spawn(async move { self.client_acceptor(&router, limiter).await }).detach();
 	}
 
-	async fn client_acceptor(self, router: Router) {
-		let router_arc = Arc::new(router);
-
-		while let Ok((mut stream, addr)) = self.listener.accept().await {
-			if self.limiter.server_allow() && self.limiter.client_allow(addr) {
-				let router_arc_clone = Arc::clone(&router_arc);
-				let limiter_clone = self.limiter.clone();
-				smol
-					::spawn(async move {
-						let _ = handler(stream, addr, router_arc_clone, limiter_clone).await;
-					})
-					.detach();
-			} else {
-				println!("aaaa");
-				let _ = stream.close().await;
-			}
+	async fn client_acceptor(self, router: &'static Router, limiter: Limiter) {
+		while let Ok((stream, addr)) = self.listener.accept().await {
+			let limiter_clone = limiter.clone();
+			smol
+				::spawn(async move {
+					let _ = handler(stream, addr, router, limiter_clone).await;
+				})
+				.detach();
 		}
 	}
 }
 
-pub const BUFFER_SIZE: usize = 1024;
+const BUFFER_SIZE: usize = 1024;
 
-async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: Arc<Router>, limiter: Limiter) -> Result<()> {
+async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: &'static Router, limiter: Limiter) -> Result<()> {
 	let mut buffer = [0; BUFFER_SIZE];
 
-	println!("aa");
+	let ip: &'static str = Box::leak(addr.ip().to_string().into_boxed_str());
 
 	loop {
 		if stream.read(&mut buffer).await? == 0 {
 			break;
 		}
 
-		if !limiter.server_allow() || !limiter.client_allow(addr) {
-			stream.write(RawResponse(429, "Too many requests").as_bytes()).await?;
+		if !limiter.server_allow() || !limiter.client_allow(&ip) {
+			stream.write(Response::status(429).message("Muitas requisições foram feitas. Tente novamente em alguns segundos.").finish().as_bytes()).await?;
 			stream.flush().await?;
 			break;
 		}
@@ -105,7 +96,7 @@ async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: A
 
 		let response = router::handle(&mut request, &router);
 
-		stream.write(response.as_bytes()).await?;
+		stream.write(response.finish().as_bytes()).await?;
 
 		stream.flush().await?;
 

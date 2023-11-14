@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::{ Mutex, Arc };
-use std::net::SocketAddr;
 
 pub struct MutexLimiter(Arc<Mutex<Limiter>>);
 
@@ -11,16 +10,30 @@ impl MutexLimiter {
 
 	pub fn start(&self) {
 		let clone = self.clone();
-
 		std::thread::spawn(move || {
-			clone.decrease_all();
-			std::thread::sleep(std::time::Duration::from_millis(100));
+			loop {
+				clone.decrease_all();
+				std::thread::sleep(std::time::Duration::from_millis(100));
+			}
+		});
+
+		let clone = self.clone();
+		std::thread::spawn(move || {
+			loop {
+				clone.remove_empty_clients();
+				std::thread::sleep(std::time::Duration::from_secs(120));
+			}
 		});
 	}
 
 	fn decrease_all(&self) {
 		let mut limiter = self.0.lock().unwrap();
 		limiter.decrease_all();
+	}
+
+	fn remove_empty_clients(&self) {
+		let mut limiter = self.0.lock().unwrap();
+		limiter.remove_empty_clients();
 	}
 
 	pub fn clone(&self) -> Self {
@@ -32,13 +45,13 @@ impl MutexLimiter {
 		limiter.server_allow()
 	}
 
-	pub fn client_allow(&self, addr: SocketAddr) -> bool {
+	pub fn client_allow(&self, addr: &'static str) -> bool {
 		let mut limiter = self.0.lock().unwrap();
 		limiter.client_allow(addr)
 	}
 }
 
-struct Limiter {
+pub struct Limiter {
 	pub limit_per_client: i32,
 	pub limit_per_server: i32,
 
@@ -47,11 +60,19 @@ struct Limiter {
 
 	server: i32,
 
-	clients: HashMap<SocketAddr, i32>,
+	clients: HashMap<&'static str, i32>,
 }
 
 impl Limiter {
-	pub fn new(limit_per_client: i32, limit_per_server: i32) -> Self {
+	pub fn new(mut limit_per_client: i32, mut limit_per_server: i32) -> Self {
+		if limit_per_client < 10 {
+			limit_per_client = 10;
+		}
+
+		if limit_per_server < 10 {
+			limit_per_server = 10;
+		}
+
 		Limiter {
 			limit_per_client,
 			limit_per_server,
@@ -62,6 +83,10 @@ impl Limiter {
 			server: 0,
 			clients: HashMap::new(),
 		}
+	}
+
+	fn remove_empty_clients(&mut self) {
+		self.clients.retain(|_, v| *v > 0);
 	}
 
 	fn decrease_all(&mut self) {
@@ -87,7 +112,9 @@ impl Limiter {
 		}
 	}
 
-	fn client_allow(&mut self, addr: SocketAddr) -> bool {
+	fn client_allow(&mut self, addr: &'static str) -> bool {
+		println!("addr: {}", addr);
+
 		let client = self.clients.entry(addr).or_insert(0);
 
 		*client += 1;
