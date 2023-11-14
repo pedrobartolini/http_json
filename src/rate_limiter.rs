@@ -113,8 +113,6 @@ impl Limiter {
 	}
 
 	fn client_allow(&mut self, addr: &'static str) -> bool {
-		println!("addr: {}", addr);
-
 		let client = self.clients.entry(addr).or_insert(0);
 
 		*client += 1;

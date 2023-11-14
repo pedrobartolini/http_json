@@ -74,6 +74,8 @@ const BUFFER_SIZE: usize = 1024;
 async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: &'static Router, limiter: Limiter) -> Result<()> {
 	let mut buffer = [0; BUFFER_SIZE];
 
+	// TODO INSERT READ TIMEOUT
+
 	let ip: &'static str = Box::leak(addr.ip().to_string().into_boxed_str());
 
 	loop {
@@ -83,29 +85,28 @@ async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: &
 
 		if !limiter.server_allow() || !limiter.client_allow(&ip) {
 			stream.write(Response::status(429).message("Muitas requisições foram feitas. Tente novamente em alguns segundos.").finish().as_bytes()).await?;
+
 			stream.flush().await?;
-			break;
-		}
+		} else {
+			let mut request = match Request::new(buffer) {
+				Some(request) => request,
+				None => {
+					continue;
+				}
+			};
 
-		let mut request = match Request::new(buffer) {
-			Some(request) => request,
-			None => {
-				break;
-			}
-		};
+			let response = router::handle(&mut request, &router);
 
-		let response = router::handle(&mut request, &router);
+			stream.write(response.finish().as_bytes()).await?;
 
-		stream.write(response.finish().as_bytes()).await?;
+			stream.flush().await?;
 
-		stream.flush().await?;
-
-		if let Some(connection) = request.headers.get("connection") {
-			if connection == "keep-alive" {
-				println!("keeping alive !!");
-				continue;
-			} else {
-				break;
+			if let Some(connection) = request.headers.get("connection") {
+				if connection == "keep-alive" {
+					continue;
+				} else {
+					break;
+				}
 			}
 		}
 	}
