@@ -12,8 +12,7 @@ struct Node {
 }
 
 struct Route {
-	pub handler: ResponseHandler,
-	method: Method,
+	pub handlers: HashMap<Method, ResponseHandler>,
 }
 
 pub struct Router {
@@ -53,12 +52,18 @@ impl Router {
 			});
 		}
 
-		// TODO FIX DUPLICATE ROUTE SUBSCRIPTION (DIFFERENT METHOD)
-
-		current.route = Some(Route {
-			method,
-			handler,
-		});
+		match current.route {
+			Some(ref mut route) => {
+				route.handlers.insert(method, handler);
+			}
+			None => {
+				let mut handlers = HashMap::new();
+				handlers.insert(method, handler);
+				current.route = Some(Route {
+					handlers,
+				});
+			}
+		}
 	}
 }
 
@@ -86,7 +91,10 @@ pub fn handle(request: &mut Request, router: &'static Router) -> Response {
 
 	match &current.route {
 		Some(route) => {
-			if route.method == request.method { (route.handler)(request) } else { Response::status(405).message("Método não permitido.") }
+			match route.handlers.get(&request.method) {
+				Some(handler) => handler(request),
+				None => Response::status(405).message(format!("Métodos disponíveis : {:?}", route.handlers.keys()).as_str()),
+			}
 		}
 		None => Response::status(404).message("Não encontrado."),
 	}
