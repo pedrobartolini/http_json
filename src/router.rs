@@ -53,7 +53,7 @@ impl Router {
 			});
 		}
 
-		// TODO FIX DUPLICATE ROUTE SUBSCRIPTION
+		// TODO FIX DUPLICATE ROUTE SUBSCRIPTION (DIFFERENT METHOD)
 
 		current.route = Some(Route {
 			method,
