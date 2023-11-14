@@ -16,7 +16,6 @@ pub use rate_limiter::MutexLimiter as Limiter;
 #[macro_export]
 macro_rules! MICRO {
 	($func:expr) => {
-		{
 			use std::time::Instant;
 
 			let start_time = Instant::now();
@@ -31,7 +30,6 @@ macro_rules! MICRO {
 			);
 
 			result
-		}
 	};
 }
 
