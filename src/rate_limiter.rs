@@ -21,7 +21,7 @@ impl MutexLimiter {
 		std::thread::spawn(move || {
 			loop {
 				clone.remove_empty_clients();
-				std::thread::sleep(std::time::Duration::from_secs(120));
+				std::thread::sleep(std::time::Duration::from_millis(120000));
 			}
 		});
 	}
@@ -45,9 +45,9 @@ impl MutexLimiter {
 		limiter.server_allow()
 	}
 
-	pub fn client_allow(&self, addr: &'static str) -> bool {
+	pub fn client_allow(&self, ip: String) -> bool {
 		let mut limiter = self.0.lock().unwrap();
-		limiter.client_allow(addr)
+		limiter.client_allow(ip)
 	}
 }
 
@@ -60,7 +60,7 @@ pub struct Limiter {
 
 	server: i32,
 
-	clients: HashMap<&'static str, i32>,
+	clients: HashMap<String, i32>,
 }
 
 impl Limiter {
@@ -94,7 +94,7 @@ impl Limiter {
 			self.server -= self.server_decreaser;
 		}
 
-		for (_, client) in self.clients.iter_mut() {
+		for client in self.clients.values_mut() {
 			if *client > 0 {
 				*client -= self.client_decreaser;
 			}
@@ -112,8 +112,8 @@ impl Limiter {
 		}
 	}
 
-	fn client_allow(&mut self, addr: &'static str) -> bool {
-		let client = self.clients.entry(addr).or_insert(0);
+	fn client_allow(&mut self, ip: String) -> bool {
+		let client = self.clients.entry(ip).or_insert(0);
 
 		*client += 1;
 

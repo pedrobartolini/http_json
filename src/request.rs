@@ -22,7 +22,7 @@ pub struct Request {
 }
 
 impl Request {
-	pub fn new(buffer: [u8; super::BUFFER_SIZE]) -> Option<Self> {
+	pub fn new(buffer: &[u8]) -> Option<Self> {
 		let mut trimmer = 0;
 
 		let (method, method_end) = parse_method(&buffer)?;

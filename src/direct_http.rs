@@ -50,7 +50,7 @@ impl Server {
 	pub fn listen(self, router: Router, limiter: Limiter) {
 		limiter.start();
 		let router: &'static Router = Box::leak(Box::new(router));
-		smol::spawn(async move { self.client_acceptor(&router, limiter).await }).detach();
+		smol::spawn(async move { self.client_acceptor(router, limiter).await }).detach();
 	}
 
 	async fn client_acceptor(self, router: &'static Router, limiter: Limiter) {
@@ -65,26 +65,32 @@ impl Server {
 	}
 }
 
-const BUFFER_SIZE: usize = 1024;
-const TIMEOUT: u64 = 2;
+const BUFFER_SIZE: usize = 2048;
+const TIMEOUT: u64 = 60;
 
 async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: &'static Router, limiter: Limiter) -> Result<()> {
 	let mut buffer = [0; BUFFER_SIZE];
 
-	let ip: &'static str = Box::leak(addr.ip().to_string().into_boxed_str());
+	let ip = addr.ip().to_string();
 
 	loop {
 		let mut keep_alive = false;
 
-		if stream.read_timeout().await || stream.read(&mut buffer).await? == 0 {
+		if stream.read_timeout().await {
+			break;
+		}
+
+		let bytes_read = stream.read(&mut buffer).await?;
+
+		if bytes_read == 0 {
 			break;
 		}
 
 		let response = {
-			if !limiter.server_allow() || !limiter.client_allow(&ip) {
+			if !limiter.server_allow() || !limiter.client_allow(ip.clone()) {
 				Response::status(429).message("Muitas requisições foram feitas. Tente novamente em alguns segundos.").finish()
 			} else {
-				match Request::new(buffer) {
+				match Request::new(&buffer[..bytes_read]) {
 					Some(mut request) => {
 						keep_alive = request.headers.get("connection").is_some_and(|value| value == "keep-alive");
 						router::handle(&mut request, &router).finish()

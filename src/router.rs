@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use super::request::{ Request, Method };
 use super::response::Response;
 
-pub type ResponseHandler = Box<dyn (Fn(&Request) -> Response) + Send + Sync>;
+pub type ResponseHandler = fn(&Request) -> Result<Response, Response>;
 
 struct Node {
 	route: Option<Route>,
-	slug_placeholder: Option<String>,
+	slug_placeholder: Option<&'static str>,
 	children: HashMap<&'static str, Node>,
 }
 
@@ -38,10 +38,10 @@ impl Router {
 				continue;
 			}
 
-			let mut slug_placeholder: Option<String> = None;
+			let mut slug_placeholder: Option<&'static str> = None;
 
 			if slug.starts_with("{") && slug.ends_with("}") {
-				slug_placeholder = Some(slug[1..slug.len() - 1].to_string());
+				slug_placeholder = Some(&slug[1..slug.len() - 1]);
 				slug = "{}";
 			}
 
@@ -78,7 +78,7 @@ pub fn handle(request: &mut Request, router: &'static Router) -> Response {
 			None =>
 				match current.children.get("{}") {
 					Some(node) => {
-						let slug_placeholder = node.slug_placeholder.clone().unwrap();
+						let slug_placeholder = node.slug_placeholder.expect("Slug placeholder not found.").to_string();
 						request.slugs.insert(slug_placeholder, slug.to_string());
 						current = node;
 					}
@@ -92,7 +92,11 @@ pub fn handle(request: &mut Request, router: &'static Router) -> Response {
 	match &current.route {
 		Some(route) => {
 			match route.handlers.get(&request.method) {
-				Some(handler) => handler(request),
+				Some(handler) =>
+					match handler(request) {
+						Ok(response) => response,
+						Err(response) => response,
+					}
 				None => Response::status(405).message(format!("Métodos disponíveis : {:?}", route.handlers.keys()).as_str()),
 			}
 		}
