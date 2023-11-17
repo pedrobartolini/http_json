@@ -1,7 +1,9 @@
+use serde::Serialize;
 use smol::prelude::*;
-use smol::io::Result;
+use smol::io;
 
 use std::net::{ TcpListener, TcpStream, SocketAddr };
+use serde::Serializer;
 
 mod request;
 mod response;
@@ -12,6 +14,27 @@ pub use response::Response;
 pub use router::{ ResponseHandler, Router };
 pub use request::{ Request, Method };
 pub use rate_limiter::MutexLimiter as Limiter;
+
+#[derive(Copy, Clone)]
+pub enum Status {
+	Ok = 200,
+	Created = 201,
+	Accepted = 202,
+	NoContent = 204,
+	BadRequest = 400,
+	Unauthorized = 401,
+	Forbidden = 403,
+	NotFound = 404,
+	MethodNotAllowed = 405,
+	TooManyRequests = 429,
+	InternalServerError = 500,
+}
+
+impl Serialize for Status {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_i32(*self as i32)
+	}
+}
 
 #[macro_export]
 macro_rules! MICRO {
@@ -68,7 +91,7 @@ impl Server {
 const BUFFER_SIZE: usize = 2048;
 const TIMEOUT: u64 = 60;
 
-async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: &'static Router, limiter: Limiter) -> Result<()> {
+async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: &'static Router, limiter: Limiter) -> io::Result<()> {
 	let mut buffer = [0; BUFFER_SIZE];
 
 	let ip = addr.ip().to_string();
@@ -88,7 +111,7 @@ async fn handler(mut stream: smol::Async<TcpStream>, addr: SocketAddr, router: &
 
 		let response = {
 			if !limiter.server_allow() || !limiter.client_allow(ip.clone()) {
-				Response::status(429).message("Muitas requisições foram feitas. Tente novamente em alguns segundos.").finish()
+				Response::status(Status::TooManyRequests).message("Muitas requisições foram feitas. Tente novamente em alguns segundos.").finish()
 			} else {
 				match Request::new(&buffer[..bytes_read]) {
 					Some(mut request) => {

@@ -1,5 +1,7 @@
 use serde_json::{ json, Value };
 
+use crate::Status;
+
 #[macro_export]
 macro_rules! ENCODE {
 	($data:expr) => {
@@ -8,13 +10,13 @@ macro_rules! ENCODE {
 }
 
 pub struct Response {
-	status: i32,
+	status: Status,
 	message: Option<String>,
 	data: Option<Value>,
 }
 
 impl Response {
-	pub fn status(status: i32) -> Self {
+	pub fn status(status: Status) -> Self {
 		Response {
 			status,
 			message: None,
@@ -40,7 +42,7 @@ impl Response {
 				},
 			Err(_) =>
 				Response {
-					status: 500,
+					status: Status::InternalServerError,
 					message: Some("Erro interno. Falha ao codificar resposta.".to_string()),
 					data: None,
 				},

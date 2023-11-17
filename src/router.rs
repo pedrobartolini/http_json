@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::request::{ Request, Method };
 use super::response::Response;
+use super::Status;
 
 pub type ResponseHandler = fn(&Request) -> Result<Response, Response>;
 
@@ -83,7 +84,7 @@ pub fn handle(request: &mut Request, router: &'static Router) -> Response {
 						current = node;
 					}
 					None => {
-						return Response::status(404).message("Não encontrado.");
+						return Response::status(Status::NotFound).message("Não encontrado.");
 					}
 				}
 		}
@@ -97,9 +98,9 @@ pub fn handle(request: &mut Request, router: &'static Router) -> Response {
 						Ok(response) => response,
 						Err(response) => response,
 					}
-				None => Response::status(405).message(format!("Métodos disponíveis : {:?}", route.handlers.keys()).as_str()),
+				None => Response::status(Status::MethodNotAllowed).message(format!("Métodos disponíveis : {:?}", route.handlers.keys()).as_str()),
 			}
 		}
-		None => Response::status(404).message("Não encontrado."),
+		None => Response::status(Status::NotFound).message("Não encontrado."),
 	}
 }
