@@ -19,6 +19,7 @@ pub struct Request {
 	pub method: Method,
 	pub slugs: HashMap<String, String>,
 	pub headers: HashMap<String, String>,
+	pub body: Option<String>,
 }
 
 impl Request {
@@ -34,9 +35,44 @@ impl Request {
 		let http_end = is_http101(&buffer[trimmer..])?;
 		trimmer += http_end;
 
-		let headers = parse_headers(&buffer[trimmer..]);
+		let (headers, headers_end) = parse_headers(&buffer[trimmer..]);
+
+		trimmer += headers_end;
+
+		println!("headers: {:?}", headers);
+
+		let body = {
+			if headers.get("content-type") == Some(&"application/json".to_string()) {
+				let content_length = headers.get("content-length")?;
+				let content_length = content_length.parse::<usize>().ok()?;
+
+				if trimmer != buffer.len() - content_length {
+					return None;
+				}
+
+				Some(String::from_utf8_lossy(&buffer[trimmer..]).to_string());
+			} else {
+				return None;
+			}
+
+			if headers.get("content-type") == Some(&"application/json".to_string()) {
+				if let Some(content_length) = headers.get("content-length") {
+					let content_length = content_length.parse::<usize>().ok()?;
+					if trimmer != buffer.len() - content_length {
+						Some(String::from_utf8_lossy(&buffer[trimmer..]).to_string())
+					} else {
+						None
+					}
+				} else {
+					None
+				}
+			} else {
+				None
+			}
+		};
 
 		Some(Request {
+			body,
 			method,
 			path,
 			headers,
@@ -96,7 +132,7 @@ fn is_http101(buffer: &[u8]) -> Option<usize> {
 	}
 }
 
-fn parse_headers(buffer: &[u8]) -> HashMap<String, String> {
+fn parse_headers(buffer: &[u8]) -> (HashMap<String, String>, usize) {
 	let mut headers: HashMap<String, String> = HashMap::new();
 
 	let mut trimmer = 0;
@@ -108,8 +144,13 @@ fn parse_headers(buffer: &[u8]) -> HashMap<String, String> {
 			headers.insert(key, value);
 		}
 
+		if buffer[trimmer + line_end..].starts_with("\r\n\r\n".as_bytes()) {
+			trimmer += line_end + 4;
+			break;
+		}
+
 		trimmer += line_end + 2;
 	}
 
-	headers
+	(headers, trimmer)
 }
