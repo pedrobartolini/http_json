@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use super::request::{ Request, Method };
-use super::response::Response;
-use super::Status;
+use super::{ Request, Method, Response, Status };
 
 pub type ResponseHandler = fn(&Request) -> Result<Response, Response>;
 

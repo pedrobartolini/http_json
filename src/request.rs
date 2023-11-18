@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use super::{ Response, Status };
+
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Method {
 	GET,
@@ -39,30 +41,13 @@ impl Request {
 
 		trimmer += headers_end;
 
-		println!("headers: {:?}", headers);
-
 		let body = {
 			if headers.get("content-type") == Some(&"application/json".to_string()) {
 				let content_length = headers.get("content-length")?;
 				let content_length = content_length.parse::<usize>().ok()?;
 
-				if trimmer != buffer.len() - content_length {
-					return None;
-				}
-
-				Some(String::from_utf8_lossy(&buffer[trimmer..]).to_string());
-			} else {
-				return None;
-			}
-
-			if headers.get("content-type") == Some(&"application/json".to_string()) {
-				if let Some(content_length) = headers.get("content-length") {
-					let content_length = content_length.parse::<usize>().ok()?;
-					if trimmer != buffer.len() - content_length {
-						Some(String::from_utf8_lossy(&buffer[trimmer..]).to_string())
-					} else {
-						None
-					}
+				if trimmer == buffer.len() - content_length {
+					Some(String::from_utf8_lossy(&buffer[trimmer..]).to_string())
 				} else {
 					None
 				}
@@ -78,6 +63,14 @@ impl Request {
 			headers,
 			slugs: HashMap::new(),
 		})
+	}
+
+	pub fn decode<T: serde::de::DeserializeOwned>(&self) -> Result<T, Response> {
+		match &self.body {
+			Some(ref body) =>
+				serde_json::from_str(body).map_err(|_| Response::status(Status::BadRequest).message("Corpo da requisição inválido.")),
+			None => Err(Response::status(Status::BadRequest).message("Corpo da requisição inválido.")),
+		}
 	}
 
 	pub fn bearer_token(&self) -> Option<String> {

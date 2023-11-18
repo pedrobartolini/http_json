@@ -1,6 +1,6 @@
 use serde_json::{ json, Value };
 
-use crate::Status;
+use super::Status;
 
 #[macro_export]
 macro_rules! ENCODE {

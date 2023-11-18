@@ -36,26 +36,6 @@ impl Serialize for Status {
 	}
 }
 
-#[macro_export]
-macro_rules! MICRO {
-	($func:expr) => {
-			use std::time::Instant;
-
-			let start_time = Instant::now();
-			let result = $func;
-			let end_time = Instant::now();
-			let elapsed_time = end_time - start_time;
-
-			println!(
-					"Time taken by {}(): {} microseconds",
-					stringify!($func),
-					elapsed_time.as_micros()
-			);
-
-			result
-	};
-}
-
 pub struct Server {
 	listener: smol::Async<TcpListener>,
 }
