@@ -2,6 +2,11 @@
 
 An simple and low-level rust REST API library.
 
+
+## WARNING!
+Do not use this. It's complete garbage, I was just messing with the language.<br>
+I will come back someday to make it better.
+
 ## Response
 
 `Response` is a struct that represents the HTTP response.<br/>
